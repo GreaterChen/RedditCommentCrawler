@@ -1,6 +1,7 @@
 import sys
 from time import sleep
 import pandas as pd
+from selenium.webdriver import ActionChains
 from tqdm import tqdm
 
 from webdriver_manager.chrome import ChromeDriverManager
@@ -32,25 +33,27 @@ class RedditCrawler:
 
     def getUrls(self, keyword, number):
         self.number = number
-        self.browser.get(f"https://www.reddit.com/r/{keyword}/")
+        self.browser.get(f"https://www.reddit.com/r/{keyword}/top/?t=month")
 
-        urls = []
+        urls = {}
 
         post_num = 0
         total_comments = 0
 
-        while total_comments < number:
+        while total_comments < self.number * 5:
             posts = self.wait.until(
                 EC.presence_of_all_elements_located((By.XPATH, "//shreddit-post"))
             )
             for post in posts[post_num:]:
-                urls.append(self.BASE_URL + post.get_attribute("permalink"))
                 comment_number = post.get_attribute("comment-count")
                 comment_number = int(comment_number)
+                if comment_number > 1000:
+                    continue
+                urls[self.BASE_URL + post.get_attribute("permalink")] = comment_number
                 total_comments += comment_number
             post_num = len(posts)
             self.browser.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-
+        urls = sorted(urls, key=urls.get, reverse=True)
         return urls
 
     def getDetails(self, urls):
@@ -81,7 +84,8 @@ class RedditCrawler:
 
             shreddit_comments = comment_tree.find_elements(By.XPATH, "shreddit-comment")
 
-            for shreddit in shreddit_comments:
+            for shreddit in tqdm(shreddit_comments, desc="爬取当前网站进度", file=sys.stdout):
+
                 try:
                     author = shreddit.get_attribute("author")
                     comment_div = shreddit.find_element(By.XPATH, ".//div[@slot='comment']")
@@ -110,4 +114,4 @@ class RedditCrawler:
 
 if __name__ == '__main__':
     r = RedditCrawler()
-    r.run("ChatGPT", 500)
+    r.run("ChatGPT", 3000)
